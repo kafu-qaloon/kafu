@@ -1,0 +1,36 @@
+name: kafu-keepalive
+# يُبقي قاعدة بيانات «إنت كفو» نشطة حتى لا يوقفها Supabase في الإجازات
+on:
+  schedule:
+    - cron: "17 6 */3 * *"   # كل 3 أيام
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" \
+              "https://lbckrfdegflarhyvzttz.supabase.co/rest/v1/core_values?select=id&limit=1" \
+              -H "apikey: sb_publishable_g8X_h0f0N1hK4qbxWVm1CA_nAOdtYPs")
+            echo "HTTP $code"
+            [ "$code" -lt 500 ] && exit 0
+            sleep 20
+          done
+          exit 1
+      - uses: actions/checkout@v4
+      - name: Keep the schedule alive (monthly commit)
+        run: |
+          last=$(git log -1 --format=%ct)
+          now=$(date +%s)
+          if [ $((now - last)) -gt 2592000 ]; then
+            date -u +"%Y-%m-%d" > .github/keepalive.txt
+            git config user.name "kafu-bot"
+            git config user.email "kafu-bot@users.noreply.github.com"
+            git add .github/keepalive.txt
+            git commit -m "keepalive"
+            git push
+          fi
